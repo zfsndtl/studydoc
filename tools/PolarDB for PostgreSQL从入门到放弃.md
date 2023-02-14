@@ -34,11 +34,27 @@ PolarDB 还支持时空、GIS、图像、向量、搜索、图谱等多模创新
 
 ## 3.产品架构
 
-PolarDB 采用了基于 Shared-Storage 的存储计算分离架构。数据库由传统的 Share-Nothing 架构，转变成了 Shared-Storage 架构。由原来的 N 份计算 + N 份存储，转变成了 N 份计算 + 1 份存储。虽然共享存储上数据是一份，但是数据在各节点内存中的状态是不同的，需要通过内存状态的同步来维护数据的一致性；同时主节点在刷脏时也需要做协调，避免只读节点读取到超前的 **“未来页面”**，也要避免只读节点读取到过时的没有在内存中被正确回放的 **“过去页面”**。为了解决该问题，PolarDB 创造性地设计了 *LogIndex* 数据结构来维护页面的回放历史，该结构能够实现主节点与只读节点之间的同步。
+PolarDB 采用了基于 Shared-Storage 的存储计算分离架构。数据库由传统的 Share-Nothing 架构，转变成了 Shared-Storage 架构。由原来的 N 份计算 + N 份存储，转变成了 N 份计算 + 1 份存储。
+
+虽然共享存储上数据是一份，但是**数据在各节点内存中的状态是不同的**，需要通过**内存状态的同步来维护数据的一致性**；同时主节点在刷脏时也需要做协调，避免只读节点读取到超前的 **“未来页面”**，也要避免只读节点读取到过时的没有在内存中被正确回放的 **“过去页面”**。为了解决该问题，PolarDB **创造性地设计了 *LogIndex* 数据结构来维护页面的回放历史，该结构能够实现主节点与只读节点之间的同步**。
 
 在存储计算分离后，I/O 单路延迟变大的同时，I/O 的吞吐也变大了。在处理分析型查询时，仅使用单个只读节点无法发挥出存储侧的大 I/O 带宽优势，也无法利用其他只读节点的 CPU、内存和 I/O 资源。为了解决该问题，PolarDB 研发了基于 Shared-Storage 的并行执行引擎，能够在 SQL 级别上弹性利用任意数目的 CPU 来加速分析查询，支持 HTAP 的混合负载场景。
 
 详情请查阅 [产品架构](https://gitee.com/link?target=https%3A%2F%2Fapsaradb.github.io%2FPolarDB-for-PostgreSQL%2Fzh%2Ftheory%2Farch-overview.html)。
+
+
+
+**PolarDB for PostgreSQL 采用了基于 Shared-Storage 的存储计算分离架构。数据库由传统的 Share-Nothing 架构，转变成了 Shared-Storage 架构——由原来的 N 份计算 + N 份存储，转变成了 N 份计算 + 1 份存储；**而 PostgreSQL 使用了传统的单体数据库架构，存储和计算耦合在一起。
+
+![image-20230112151322121](文档图片/image-20230112151322121.png)
+
+为保证所有计算节点能够以相同的可见性视角访问分布式块存储设备，**PolarDB 需要使用分布式文件系统 [PolarDB File System（PFS）open in new window](https://github.com/ApsaraDB/PolarDB-FileSystem) 来访问块设备**，其实现原理可参考发表在 2018 年 VLDB 上的论文[[1\]](https://apsaradb.github.io/PolarDB-for-PostgreSQL/zh/deploying/introduction.html#fn1)；如果所有计算节点都可以本地访问同一个块存储设备，那么也可以不使用 PFS，直接使用本地的单机文件系统（如 ext4）。这是与 PostgreSQL 的不同点之一。
+
+------
+
+1. [PolarFS: an ultra-low latency and failure resilient distributed file system for shared storage cloud databaseopen in new window](https://www.vldb.org/pvldb/vol11/p1849-cao.pdf) [↩︎](https://apsaradb.github.io/PolarDB-for-PostgreSQL/zh/deploying/introduction.html#fnref1)
+
+
 
 
 
@@ -143,6 +159,7 @@ drwx------ 1 postgres postgres 4096 Jan  9 15:12 tmp_master_dir_polardb_pg_1100_
 exit
 
 #退出容器重启
+[root@iZbp16q2a88a3l0pqujhabZ ~]# docker start 4f5f 
 [root@iZbp16q2a88a3l0pqujhabZ ~]# docker exec -it 4f5f /bin/bash
 # 查看容器状态
 [root@iZbp16q2a88a3l0pqujhabZ ~]# docker ps
@@ -238,6 +255,32 @@ CONTAINER ID   IMAGE                                      COMMAND               
 
 ![image-20230109231516511](文档图片/image-20230109231516511.png)
 
+查看目录结构
+
+tmp_basedir_polardb_pg_1100_bld  polardb_pg安装目录：包含pg bin命令，lib库，share目录，include目录
+
+tmp_datadir_polardb_pg_1100_bld 实例数据目录 base具体数据目录
+
+tmp_master_dir_polardb_pg_1100_bld   实例操作命令，pg实例配置文件，pid进程文件等等 
+
+（个人理解是原生pg实例目录；计算和数据存储目录做了分离）
+
+![image-20230110152053187](文档图片/image-20230110152053187.png)
+
+
+
+![image-20230110151253972](文档图片/image-20230110151253972.png)
+
+查看进程
+
+/bin/sh -c ~/tmp_basedir_polardb_pg_1100_bld/bin/pg_ctl -D ~/tmp_master_dir_polardb_pg_1100_bld start
+
+![image-20230110151334357](文档图片/image-20230110151334357.png)
+
+
+
+
+
 #### 多实例
 
 ```bash
@@ -251,7 +294,248 @@ psql -h 127.0.0.1 -c 'select version();'
 --------------------------------
  PostgreSQL 11.9 (POLARDB 11.9)
 (1 row)
+
+#退出 停止容器,查看状态
+[postgres@0852dbf78886 ~]$ exit
+exit
+
+[root@iZbp16q2a88a3l0pqujhabZ /]# docker stop 0852
+0852
+[root@iZbp16q2a88a3l0pqujhabZ /]# docker ps -a
+CONTAINER ID   IMAGE                                       COMMAND                  CREATED             STATUS                           PORTS     NAMES
+0852dbf78886   polardb/polardb_pg_local_instance:withrep   "/bin/sh -c '~/tmp_b…"   About an hour ago   Exited (127) 20 seconds ago                polardb_pg_withrep
+4f5f76377b6d   polardb/polardb_pg_local_instance:single    "/bin/sh -c '~/tmp_b…"   18 hours ago        Exited (137) About an hour ago             polardb_pg_single
+
+#重启和进入容器
+[root@iZbp16q2a88a3l0pqujhabZ ~]# docker start 0852 
+[root@iZbp16q2a88a3l0pqujhabZ ~]# docker exec -it 0852 /bin/bash
+
+
 ```
+
+下载并查看镜像
+
+![image-20230110152553537](文档图片/image-20230110152553537.png)
+
+创建运行并进入容器
+
+实例1  /home/postgres/tmp_master_dir_polardb_pg_1100_bld 5432端口
+
+![image-20230110152923295](文档图片/image-20230110152923295.png)
+
+实例2  /home/postgres/tmp_replica_dir_polardb_pg_1100_bld 5433端口
+
+![image-20230110153030695](文档图片/image-20230110153030695.png)
+
+查看节点信息
+
+```shell
+#主节点
+[postgres@0852dbf78886 ~]$ psql -p 5432
+psql (11.9)
+Type "help" for help.
+
+postgres=# \dx
+                 List of installed extensions
+  Name   | Version |   Schema   |         Description          
+---------+---------+------------+------------------------------
+ plpgsql | 1.0     | pg_catalog | PL/pgSQL procedural language
+(1 row)
+
+postgres=# select pid,usename, application_name from pg_stat_replication ;
+ pid | usename  | application_name 
+-----+----------+------------------
+  45 | postgres | replica1
+(1 row)
+
+postgres=# select * from pg_replication_slots ;
+ slot_name | plugin | slot_type | datoid | database | temporary | active | active_pid | xmin | catalog_xmin | restart_lsn | confirmed_flush_lsn 
+-----------+--------+-----------+--------+----------+-----------+--------+------------+------+--------------+-------------+---------------------
+ replica1  |        | physical  |        |          | f         | t      |         45 |      |              | 0/179E518   | 
+(1 row)
+
+#备节点
+[postgres@0852dbf78886 ~]$ psql -p 5433
+psql (11.9)
+Type "help" for help.
+
+postgres=# select * from pg_replication_slots ;
+ slot_name | plugin | slot_type | datoid | database | temporary | active | active_pid | xmin | catalog_xmin | restart_lsn | confirmed_flush_lsn 
+-----------+--------+-----------+--------+----------+-----------+--------+------------+------+--------------+-------------+---------------------
+(0 rows)
+
+postgres=# select pid,usename, application_name from pg_stat_replication ;
+ pid | usename | application_name 
+-----+---------+------------------
+(0 rows)
+
+postgres=# select pid,status,receive_start_lsn from pg_stat_wal_receiver;
+ pid |  status   | receive_start_lsn 
+-----+-----------+-------------------
+  44 | streaming | 0/179E5C0
+(1 row)
+
+```
+
+![image-20230110153744467](文档图片/image-20230110153744467.png)
+
+ pg_controldata 查看
+
+```shell
+[postgres@0852dbf78886 ~]$ pg_controldata tmp_master_dir_polardb_pg_1100_bld | grep cluster
+Database cluster state:               shut down
+
+[postgres@0852dbf78886 ~]$ pg_controldata tmp_replica_dir_polardb_pg_1100_bld/ | grep cluster
+Database cluster state:               in archive recovery
+```
+
+查看进程
+
+![image-20230110154152893](文档图片/image-20230110154152893.png)
+
+数据测试： 主节点创建test库，备节点同步
+
+```shell
+#主节点创建test库，备节点同步
+[postgres@0852dbf78886 ~]$ psql -p 5432
+psql (11.9)
+Type "help" for help.
+
+postgres=# create database test;
+CREATE DATABASE
+
+
+postgres=# \l
+                                    List of databases
+     Name      |  Owner   | Encoding |   Collate   |    Ctype    |   Access privileges   
+---------------+----------+----------+-------------+-------------+-----------------------
+ polardb_admin | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =T/postgres          +
+               |          |          |             |             | postgres=CTc/postgres
+ postgres      | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | 
+ template0     | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =c/postgres          +
+               |          |          |             |             | postgres=CTc/postgres
+ template1     | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =c/postgres          +
+               |          |          |             |             | postgres=CTc/postgres
+ test          | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | 
+(5 rows)
+
+postgres=# \q
+
+#查看备节点
+[postgres@0852dbf78886 ~]$ psql -p 5433
+psql (11.9)
+Type "help" for help.
+
+postgres=# \l
+                                    List of databases
+     Name      |  Owner   | Encoding |   Collate   |    Ctype    |   Access privileges   
+---------------+----------+----------+-------------+-------------+-----------------------
+ polardb_admin | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =T/postgres          +
+               |          |          |             |             | postgres=CTc/postgres
+ postgres      | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | 
+ template0     | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =c/postgres          +
+               |          |          |             |             | postgres=CTc/postgres
+ template1     | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =c/postgres          +
+               |          |          |             |             | postgres=CTc/postgres
+ test          | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | 
+(5 rows)
+
+postgres=# \q
+
+
+
+```
+
+查看主节点 postgresql.conf配置文件：  备节点实例名称叫 replica1 
+
+![image-20230110154935796](文档图片/image-20230110154935796.png)
+
+主节点查看备节点信息
+
+![image-20230110155029787](文档图片/image-20230110155029787.png)
+
+主节点查看归档配置，默认未开启
+
+```
+[postgres@0852dbf78886 tmp_master_dir_polardb_pg_1100_bld]$ cat postgresql.conf |grep archive_mode
+#archive_mode = off		# enables archiving; off, on, or always
+[postgres@0852dbf78886 tmp_master_dir_polardb_pg_1100_bld]$ cat postgresql.conf |grep archive_command
+#archive_command = ''	
+```
+
+
+
+![image-20230110155216489](文档图片/image-20230110155216489.png)
+
+
+
+主机点查看主备配置
+
+```shell
+[postgres@0852dbf78886 tmp_master_dir_polardb_pg_1100_bld]$ cat postgresql.conf |grep synchronous_commit
+#synchronous_commit = on		# synchronization level;
+        synchronous_commit = on
+[postgres@0852dbf78886 tmp_master_dir_polardb_pg_1100_bld]$ cat postgresql.conf |grep synchronous_standby_names
+#synchronous_standby_names = ''	# standby servers that provide sync rep
+synchronous_standby_names='replica1'
+```
+
+> pg主从有5种模式，由synchronous_commit 参数控制。synchronous_commit 参数的本质就是控制主库什么时候提交。
+> remote_apply：所有备库上均已应用完WAL时，主库提交。所以这个模式是同步模式，主从是一致的，主库上能查到的数据备库上一定也可以查到，这种模式下主备没有延时，但对主库提交时间有影响，因为主库commit需要等待网络传输和备库应用时间
+> synchronous_commit的含义分2种情况，有从库和无从库时（synchronous_standby_name空或非空时）
+>
+> 当synchronous_standby_name为非空时：
+> remote_apply:从库已应用了wal，主库才可以提交。这种模式主从是同步的
+> on：default。主从的wal都写到磁盘上时，主库提交。类似半同步，不会丢数据。
+> remote_write：备库接收到wal并将wal日志写到文件系统cache上时，主库提交。此时从库的接收到wal但是还没有落盘，如果操作系统crash，会丢失数据。
+> local：主库wal刷到磁盘时提交。这种模式是异步的，主库不需要确认备库状态就可以提交。
+> off：本机wal没有刷到磁盘就可以提交，存在数据丢失风险，不推荐。
+>
+> 当synchronous_standby_name为空时：
+> （当synchronous_standby_name为空时，synchronous_commit只有on和off有效，如果是remote_apply, remote_write and local ，那么仍然被认为是on）
+> on：default。数据库wal写到磁盘上，事务才可以提交
+> off：本机wal没有刷到磁盘就可以提交，存在数据丢失风险，不推荐。
+
+![image-20230110160338433](文档图片/image-20230110160338433.png)
+
+查看pg_hba.conf查看角色权限控制 ；trust 信任免密，无需输密码
+
+```shell
+cat pg_hba.conf 
+```
+
+![image-20230110160712825](文档图片/image-20230110160712825.png)
+
+备节点查看上述配置
+
+```shell
+[postgres@0852dbf78886 ~]$ cd tmp_replica_dir_polardb_pg_1100_bld/
+[postgres@0852dbf78886 tmp_replica_dir_polardb_pg_1100_bld]$ ls
+base              pg_dynshmem    pg_logindex   pg_snapshots  pg_twophase        polar_fullpage          postgresql.auto.conf
+current_logfiles  pg_hba.conf    pg_multixact  pg_stat       PG_VERSION         polar_node_static.conf  postgresql.conf
+global            pg_ident.conf  pg_notify     pg_stat_tmp   pg_xact            polar_rel_size_cache    postmaster.opts
+pg_commit_ts      pg_log         pg_replslot   pg_subtrans   polar_cache_trash  polar_replica_booted    postmaster.pid
+pg_csnlog         pg_logical     pg_serial     pg_tblspc     polar_dma.conf     polar_shmem_stat_file   recovery.conf
+[postgres@0852dbf78886 tmp_replica_dir_polardb_pg_1100_bld]$ cat recovery.conf 
+primary_conninfo = 'host=localhost port=5432 user=postgres dbname=postgres application_name=replica1'
+polar_replica = on
+recovery_target_timeline = 'latest'
+primary_slot_name = 'replica1'
+primary_conninfo = 'host=localhost port=5432 user=postgres dbname=postgres application_name=replica1'
+primary_slot_name = 'replica1'
+[postgres@0852dbf78886 tmp_replica_dir_polardb_pg_1100_bld]$ cat postgresql.conf |grep synchronous_standby_names
+#synchronous_standby_names = ''	# standby servers that provide sync rep
+[postgres@0852dbf78886 tmp_replica_dir_polardb_pg_1100_bld]$ cat postgresql.conf |grep synchronous_commit
+#synchronous_commit = on		# synchronization level;
+        synchronous_commit = on
+[postgres@0852dbf78886 tmp_replica_dir_polardb_pg_1100_bld]$ cat postgresql.conf |grep archive_mode
+#archive_mode = off		# enables archiving; off, on, or always
+[postgres@0852dbf78886 tmp_replica_dir_polardb_pg_1100_bld]$ cat postgresql.conf |grep archive_command
+#archive_command = ''		# command to use to archive a logfile segment
+
+```
+
+![image-20230110164530124](文档图片/image-20230110164530124.png)
 
 #### HTAP实例
 
@@ -411,3 +695,22 @@ DMA 实例回归测试：
 ```bash
 ./polardb_build.sh -r -e -r-external -r-contrib -r-pl --with-tde --with-dma
 ```
+
+
+
+### 问题
+
+最近在学习 PolarDB for PostgreSQL 的课程，链接如下：
+[PolarDB for PostgreSQL 开源人才初级认证培训课程](https://developer.aliyun.com/learning/course/1077)
+
+其中讲到PolarDB的架构
+![image.png](https://ucc.alicdn.com/pic/developer-ecology/jnzecfw2bfrmg_1cedcffbf3e8483894982bed1cd0fb6a.png)
+
+这块有讲到计算存储分离，shared Storage的架构。
+
+这块有个问题：
+
+1. shared Storage的架构感觉和 Oracle 的RAC (shared disk)有点像，这两有什么区别吗？
+
+
+感谢
