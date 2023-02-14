@@ -143,9 +143,15 @@ Personal access token 只能用于 HTTPS Git 操作。 如果存储库使用 SSH
 
 ![image-20230214162143222](文档图片/image-20230214162143222.png)
 
-接下来就可以使用账号token登录。还是不行，因为上面配置的只能操作public 的仓库
+接下来就可以使用账号token登录。
 
 ![image-20230214163208717](文档图片/image-20230214163208717.png)
+
+还是不行，因为上面配置的只能操作没有配置该token可以操作的仓库
+
+![image-20230214165410927](文档图片/image-20230214165410927.png)还是不行，因为上面配置的只能操作public 的仓库
+
+
 
 ## Personal access tokens (classic)具体操作：
 
