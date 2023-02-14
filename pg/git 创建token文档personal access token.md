@@ -162,3 +162,7 @@ Personal access token 只能用于 HTTPS Git 操作。 如果存储库使用 SSH
 用账号密码登录，push成功
 
 ![image-20230214164630550](文档图片/image-20230214164630550.png)
+
+
+
+注意token有时效，要定期更新
