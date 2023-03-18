@@ -1099,7 +1099,7 @@ System.out.println("waiting...");
   * SocketChannel.read 在没有数据可读时，会返回 0，但线程不必阻塞，可以去执行其它 SocketChannel 的 read 或是去执行 ServerSocketChannel.accept 
   * 写数据时，线程只是等待数据写入 Channel 即可，无需等 Channel 通过网络把数据发送出去
 * 但非阻塞模式下，即使没有连接建立，和可读数据，线程仍然在不断运行，白白浪费了 cpu
-* 数据复制过程中，线程实际还是阻塞的（AIO 改进的地方）
+* **数据复制过程中，线程实际还是阻塞的（AIO 改进的地方）**
 
 
 
