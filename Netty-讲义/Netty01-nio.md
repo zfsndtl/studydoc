@@ -1003,6 +1003,47 @@ Files.walkFileTree(path, new SimpleFileVisitor<Path>(){
 
 
 
+```java
+//删除多级目录
+public class TestDeleteFileDirectory {
+    public static void main(String[] args) {
+        long start = System.currentTimeMillis();
+        String source = "D:\\Snipaste-1.16.2-x64";
+        AtomicInteger fileCount = new AtomicInteger();
+        Files.walkFileTree(Paths.get(source), new SimpleFileVisitor<Path>(){
+
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
+                    throws IOException {
+                System.out.println("进入目录前"+dir);
+                return super.preVisitDirectory(dir, attrs);
+            }
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path dir, BasicFileAttributes attrs)
+                    throws IOException {
+                System.out.println("退出目录"+dir);
+                Files.delete(dir);//退出目录时删除目录
+                return super.postVisitDirectory(dir, attrs);
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
+                    throws IOException {
+                System.out.println("查看文件"+file);
+                fileCount.incrementAndGet();
+                Files.delete(file);//遍历目录里面的文件时，才删除文件
+                return super.visitFile(file, attrs);
+            }
+        });
+    }
+}
+```
+
+
+
+
+
 拷贝多级目录
 
 ```java
